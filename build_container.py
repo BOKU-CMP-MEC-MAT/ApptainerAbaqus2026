@@ -27,8 +27,9 @@ def main():
         args.def_file = def_input if def_input else "abaqus.def"
 
     if args.out_file is None:
-        out_input = input("Enter output container name (.sif) [default: abaqus_2026.sif]: ").strip()
-        args.out_file = out_input if out_input else "abaqus_2026.sif"
+        # default name is def file name with .sif extension
+        out_input = input("Enter output container name (.sif) [default: derived from .def file]: ").strip()
+        args.out_file = out_input if out_input else os.path.splitext(os.path.basename(args.def_file))[0] + ".sif"
 
     if args.make_jobs is None:
         jobs_input = input("Enter number of parallel make jobs [default: 1]: ").strip()

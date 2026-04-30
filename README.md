@@ -2,7 +2,7 @@
 
 This repository contains automated tools to build, compile, and update a containerized environment for Abaqus (2026) integrated with the Marmot constitutive modeling library. 
 
-Because Abaqus requires proprietary graphical libraries, specific OS spoofing, and license checkouts during user subroutine compilation, these scripts automate the complex "Sandbox Pivot" workflow using Apptainer.
+Because Abaqus requires proprietary graphical libraries, these scripts automate the complex "Sandbox Pivot" workflow using Apptainer.
 
 ## Prerequisites
 
