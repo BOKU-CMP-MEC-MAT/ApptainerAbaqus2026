@@ -1,9 +1,6 @@
 BootStrap: docker
 From: ubuntu:26.04
 
-%arguments
-    MAKE_JOBS=1
-
 %setup
     mkdir -p ${APPTAINER_ROOTFS}/2026/
     
@@ -152,8 +149,20 @@ From: ubuntu:26.04
     #                                                                               #
     #                       FIX ENVIRONMENT PARSER CRASH                            #
     #                                                                               #
+    #                       This fixes                                              #
+    #       driverExceptions.EnvironmentFileReadError: /...../......../abaqus_v6.e  #
+    #       File "SMAPyaModules/SMAPyaDriverPy.m/src/driverUtilsCae.py", line 44,   #
+    #       File "SMAPyaModules/SMAPyaDriverPy.m/src/driverUtilsCae.py", line 28,   #
+    #       File "SMAPylModules/SMAPylDriverPy.m/src/driverEnv.py", line 878, in    #
+    #       File "SMAPylModules/SMAPylDriverPy.m/src/driverEnv.py", line 770, in    #
+    #       File "SMAPylModules/SMAPylDriverPy.m/src/driverEnv.py", line 672, in    #
+    #       File "SMAPylModules/SMAPylDriverPy.m/src/driverEnv.py", line 391, in    #
+    #                                                                               #
+    #       Abaqus Error: Abaqus/CAE Kernel exited with an error.                   #
+    #                                                                               #
     #################################################################################
-    # 1. Comment out the import of custom_v6.env to prevent the read error
+
+    #  Comment out the import of custom_v6.env to prevent the read error
     sed -i "s/importEnv('custom_v6.env', warn=False)/#importEnv('custom_v6.env', warn=False)/g" /opt/SIMULIA/EstProducts/2026/linux_a64/SMA/site/abaqus_v6.env
 
     #################################################################################
@@ -174,10 +183,11 @@ From: ubuntu:26.04
             -DELEMENT_MODULES='all' \
             -DCMAKE_INSTALL_PREFIX=/usr/local \
             ..
-        make -j"$(nproc)" install
+
+        make -j"${MAKE_JOBS}" install
 
         cd /projects/Abaqus-MarmotInterface
-        cp /projects/Abaqus-MarmotInterface/abaqus_v6.env_gcc_compiler_linux_2024 abaqus_v6.env
+        cp /projects/Abaqus-MarmotInterface/abaqus_v6.env_gcc_compiler_linux abaqus_v6.env
 
         export MARMOT_INSTALL_DIR=/usr/local 
         export MARMOT_INSTALL_LIBDIR=lib64 

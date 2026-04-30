@@ -88,7 +88,7 @@ def main():
         """
 
         cmd = [
-            "sudo", "-E", "apptainer", "exec", "--writable", args.sandbox,
+            "sudo", "-E", "apptainer", "exec", "--writable", "--clean-env", args.sandbox,
             "bash", "-c", compile_script
         ]
         
