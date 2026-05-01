@@ -10,7 +10,8 @@ def main():
     
     # Define command line arguments
     parser.add_argument("--def-file", help="Path to the Apptainer recipe (.def) file")
-    parser.add_argument("--out-file", help="Output container name (.sif)")
+    parser.add_argument("--convert", choices=['yes', 'no'], help="Convert the sandbox to a read-only .sif image (default: yes)")
+    parser.add_argument("--out-file", help="Output container name (file or directory depending on --convert)")
     parser.add_argument("--make-jobs", type=int, help="Number of parallel make jobs for compilation")
     parser.add_argument("--marmot-dir", help="Path to the Marmot directory on the host")
     parser.add_argument("--marmot-interface", help="Path to the Abaqus-MarmotInterface directory on the host")
@@ -26,10 +27,17 @@ def main():
         def_input = input("Enter path to Apptainer recipe (.def) file [default: abaqus.def]: ").strip()
         args.def_file = def_input if def_input else "abaqus.def"
 
+    if args.convert is None:
+        convert_input = input("Convert sandbox to a read-only .sif image? (yes/no) [default: yes]: ").strip().lower()
+        args.convert = convert_input if convert_input in ['yes', 'no'] else 'yes'
+
     if args.out_file is None:
-        # default name is def file name with .sif extension
-        out_input = input("Enter output container name (.sif) [default: derived from .def file]: ").strip()
-        args.out_file = out_input if out_input else os.path.splitext(os.path.basename(args.def_file))[0] + ".sif"
+        # Intelligently default the output extension based on whether we are keeping the sandbox
+        default_ext = ".sif" if args.convert == 'yes' else ".sbx"
+        default_name = os.path.splitext(os.path.basename(args.def_file))[0] + default_ext
+        
+        out_input = input(f"Enter output container name [default: {default_name}]: ").strip()
+        args.out_file = out_input if out_input else default_name
 
     if args.make_jobs is None:
         jobs_input = input("Enter number of parallel make jobs [default: 1]: ").strip()
@@ -68,7 +76,8 @@ def main():
         build_env["MARMOT_DIR"] = os.path.abspath(args.marmot_dir)
         build_env["MARMOT_INTERFACE_DIR"] = os.path.abspath(args.marmot_interface)
     
-    sandbox_dir = "tmp_abaqus_sandbox"
+    # Use the requested .sbx extension for the temporary sandbox environment
+    sandbox_dir = "tmp_abaqus.sbx"
 
     try:
         # =====================================================================
@@ -104,18 +113,21 @@ def main():
             print("\n[STEP 2/3] Skipping subroutine compilation (No Marmot directories provided).")
 
         # =====================================================================
-        # STEP 3: Freeze to SIF and Cleanup
+        # STEP 3: Freeze to SIF and Cleanup (Conditional)
         # =====================================================================
-        print("\n[STEP 3/3] Freezing sandbox into final read-only .sif image...")
-        cmd3 = ["sudo", "-E", "apptainer", "build", args.out_file, sandbox_dir]
-        subprocess.run(cmd3, env=build_env, check=True)
+        if args.convert == 'yes':
+            print("\n[STEP 3/3] Freezing sandbox into final read-only .sif image...")
+            cmd3 = ["sudo", "-E", "apptainer", "build", args.out_file, sandbox_dir]
+            subprocess.run(cmd3, env=build_env, check=True)
 
-        print("\n[CLEANUP] Removing temporary sandbox and temp build files...")
-        subprocess.run(["sudo", "rm", "-rf", sandbox_dir], check=True)
-        # Optionally, you can also clean up the apptainer_tmp directory here if you don't need it cached
-        # subprocess.run(["sudo", "rm", "-rf", args.tmp_dir], check=True)
-
-        print(f"\n[DONE] Container fully built and ready: {args.out_file}")
+            print("\n[CLEANUP] Removing temporary sandbox...")
+            subprocess.run(["sudo", "rm", "-rf", sandbox_dir], check=True)
+            print(f"\n[DONE] Container fully built and ready: {args.out_file}")
+        else:
+            print("\n[STEP 3/3] Skipping .sif conversion. Finalizing sandbox directory...")
+            # Rename the temporary sandbox to the final specified output name
+            subprocess.run(["sudo", "mv", sandbox_dir, args.out_file], check=True)
+            print(f"\n[DONE] Writable sandbox fully built and ready: {args.out_file}/")
 
     except subprocess.CalledProcessError as e:
         print(f"\n[ERROR] Process failed with exit code {e.returncode}.")

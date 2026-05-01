@@ -175,8 +175,8 @@ From: ubuntu:26.04
     if [ -d "/projects/Marmot/" ] && [ -d "/projects/Abaqus-MarmotInterface/" ]; then
         cd /projects/Marmot
         git clean -x -f || true
-        mkdir -p build_ubuntu_gcc
-        cd build_ubuntu_gcc
+        mkdir -p build_gcc
+        cd build_gcc
         cmake \
             -DCORE_MODULES='all' \
             -DMATERIAL_MODULES='all' \
@@ -203,6 +203,9 @@ From: ubuntu:26.04
     export LANG=en_US.UTF-8
     export SIMULIA_COMMANDS=/opt/DassaultSystemes/SIMULIA/Commands
     export PATH=${SIMULIA_COMMANDS}:$PATH
+
+    export MARMOT_INSTALL_DIR=/usr/local 
+    export MARMOT_INSTALL_LIBDIR=lib64 
 
 %runscript
     echo "Use 'abaqus' inside this container. Examples:"
