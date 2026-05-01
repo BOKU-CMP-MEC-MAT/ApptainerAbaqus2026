@@ -1,0 +1,214 @@
+BootStrap: docker
+From: rockylinux:9
+
+%arguments
+    MAKE_JOBS=1
+
+%setup
+    mkdir -p ${APPTAINER_ROOTFS}/2026/
+    
+    # Extract directly from host to container without copying the tarballs
+    tar xf 2026.AM_SIM_Abaqus_Extend.AllOS.1-5.tar -C ${APPTAINER_ROOTFS}/2026/
+    tar xf 2026.AM_SIM_Abaqus_Extend.AllOS.2-5.tar -C ${APPTAINER_ROOTFS}/2026/
+    tar xf 2026.AM_SIM_Abaqus_Extend.AllOS.3-5.tar -C ${APPTAINER_ROOTFS}/2026/
+    tar xf 2026.AM_SIM_Abaqus_Extend.AllOS.4-5.tar -C ${APPTAINER_ROOTFS}/2026/
+    tar xf 2026.AM_SIM_Abaqus_Extend.AllOS.5-5.tar -C ${APPTAINER_ROOTFS}/2026/
+
+    cp assets/UserIntentions_CODE.xml ${APPTAINER_ROOTFS}/2026/
+    # Fixed mismatched filename to align with the %post execution command
+    cp assets/UserIntentions_CAA_Additional_428.xml ${APPTAINER_ROOTFS}/2026/
+
+    mkdir -p ${APPTAINER_ROOTFS}/projects/
+    
+    # COPY MARMOT FOR CONSTITUTIVE MODELS
+    # COPY MARMOT INTERFACE FOR CONSTITUTIVE MODELS
+    if  [[ -v MARMOT_DIR ]] && [[ -v MARMOT_INTERFACE_DIR ]];
+    then
+        cp -r ${MARMOT_DIR} ${APPTAINER_ROOTFS}/projects/Marmot
+        cp -r ${MARMOT_INTERFACE_DIR} ${APPTAINER_ROOTFS}/projects/Abaqus-MarmotInterface
+    fi
+
+%post
+    set -e
+    export TZ=Etc/UTC
+    
+    # On Rocky, /bin/sh is already a symlink to bash, but we enforce it just in case
+    ln -sf /bin/bash /bin/sh
+
+    #################################################################################
+    #                                                                               #
+    #                               MAKE PARALLEL JOBS                              #
+    #                                                                               #
+    #################################################################################
+    export MAKE_JOBS={{ MAKE_JOBS }}
+    echo "Using ${MAKE_JOBS} make jobs"
+
+    #################################################################################
+    #                                                                               #
+    #                               BASE PACKAGES & GCC 15                          #
+    #                                                                               #
+    #################################################################################
+    
+    # Enable EPEL and CRB repositories for extended developer libraries
+    dnf install -y epel-release
+    crb enable
+    
+    dnf update -y
+    dnf install -y \
+        ksh perl zlib-devel \
+        libX11 libXext libXrender libXi libSM libICE libXt libXmu libXpm \
+        xcb-util-renderutil xcb-util-image xcb-util-keysyms xcb-util-wm libxcb \
+        libGLES libXcomposite libXdamage libXrandr libXtst libpng freetype fontconfig libxkbcommon \
+        nss pcre2 pcre2-utf16 \
+        mesa-libGLU libXau libXdmcp \
+        git wget cmake make \
+        glx-utils xorg-x11-xauth \
+        gcc-toolset-15-gcc gcc-toolset-15-gcc-c++ gcc-toolset-15-gcc-gfortran
+
+    # Activate GCC 15 for the rest of the %post build process
+    source /opt/rh/gcc-toolset-15/enable
+
+    # Rocky 9 dropped the LSB core package. We create a fake lsb_release command 
+    # to bypass the strict Abaqus installer checks.
+    echo -e '#!/bin/bash\necho "CentOS"' > /usr/bin/lsb_release
+    chmod +x /usr/bin/lsb_release
+
+    #################################################################################
+    #                                                                               #
+    #                          LIBJPEG-TURBO MANUAL INSTALL PART 1                  #
+    #                                                                               #
+    #################################################################################
+    cd $APPTAINER_TMPDIR
+    wget https://github.com/libjpeg-turbo/libjpeg-turbo/releases/download/3.0.3/libjpeg-turbo-official-3.0.3.x86_64.rpm
+    rpm -i libjpeg-turbo-official-3.0.3.x86_64.rpm
+
+    #################################################################################
+    #                                                                               #
+    #                               EIGEN 3.4.0                                     #
+    #                                                                               #
+    #################################################################################
+    cd $APPTAINER_TMPDIR
+    git clone -b 3.4.0 https://gitlab.com/libeigen/eigen.git
+    cd eigen
+    mkdir build
+    cd build
+    cmake -DBUILD_TESTING=OFF ../
+    make -j ${MAKE_JOBS} install
+    
+    #################################################################################
+    #                                                                               #
+    #                               FASTOR LATEST                                   #
+    #                                                                               #
+    #################################################################################
+    cd $APPTAINER_TMPDIR
+    git clone https://github.com/romeric/Fastor.git
+    cd Fastor
+    cmake -DBUILD_TESTING=OFF .
+    make -j ${MAKE_JOBS} install
+    
+    #################################################################################
+    #                                                                               #
+    #                               AUTODIFF LATEST                                 #
+    #                                                                               #
+    #################################################################################
+    cd $APPTAINER_TMPDIR
+    git clone https://github.com/autodiff/autodiff.git
+    cd autodiff
+    mkdir build
+    cd build
+    cmake -DAUTODIFF_BUILD_TESTS=OFF -DAUTODIFF_BUILD_PYTHON=OFF -DAUTODIFF_BUILD_EXAMPLES=OFF -DAUTODIFF_BUILD_DOCS=OFF ..
+    make -j ${MAKE_JOBS} install
+
+    #################################################################################
+    #                                                                               #
+    #                               ABAQUS 2026 INSTALL                             #
+    #                                                                               #
+    #################################################################################
+    cd /2026
+
+    export DSY_Force_OS=linux_a64
+    export DSYAuthOS_`lsb_release --short --id |sed 's/ //g'`=1
+    export DSY_Skip_CheckPrereq=1
+
+    # Run silent installers
+    /2026/AM_SIM_Abaqus_Extend.AllOS/4/SIMULIA_EstablishedProducts/Linux64/1/StartTUI.sh \
+        --silent /2026/UserIntentions_CODE.xml
+    /2026/AM_SIM_Abaqus_Extend.AllOS/5/SIMULIA_EstablishedProducts_CAA_API/Linux64/1/StartTUI.sh \
+    --silent /2026/UserIntentions_CAA_Additional_428.xml
+
+    # Clean installer payload
+    rm -rf /2026/*AM_SIM_Abaqus_Extend.AllOS* /2026/UserIntentions_*.xml
+
+    export PATH=$PATH:/opt/DassaultSystemes/SIMULIA/Commands/
+
+    dnf clean all
+    rm -rf /var/cache/dnf /tmp/*
+
+    #################################################################################
+    #                                                                               #
+    #                          LIBJPEG-TURBO MANUAL INSTALL PART 2                  #
+    #                                                                               #
+    #################################################################################
+    ln -sf /opt/libjpeg-turbo/lib64/libjpeg.so.62 /opt/SIMULIA/EstProducts/2026/linux_a64/code/bin/libjpeg.so.62
+
+    #################################################################################
+    #                                                                               #
+    #                       FIX ENVIRONMENT PARSER CRASH                            #
+    #                                                                               #
+    #################################################################################
+    #  Comment out the import of custom_v6.env to prevent the read error
+    sed -i "s/importEnv('custom_v6.env', warn=False)/#importEnv('custom_v6.env', warn=False)/g" /opt/SIMULIA/EstProducts/2026/linux_a64/SMA/site/abaqus_v6.env
+
+    #################################################################################
+    #                                                                               #
+    #           (1)                 BUILD MARMOT                                    #
+    #                                                                               #
+    #           (2)                 BUILD ABAQUS USUB_LIB                           #
+    #                                                                               #
+    #################################################################################
+    if [ -d "/projects/Marmot/" ] && [ -d "/projects/Abaqus-MarmotInterface/" ]; then
+        cd /projects/Marmot
+        git clean -x -f || true
+        mkdir -p build_gcc
+        cd build_gcc
+        cmake \
+            -DCORE_MODULES='all' \
+            -DMATERIAL_MODULES='all' \
+            -DELEMENT_MODULES='all' \
+            -DCMAKE_INSTALL_PREFIX=/usr/local \
+            ..
+
+        make -j"${MAKE_JOBS}" install
+
+        cd /projects/Abaqus-MarmotInterface
+        cp /projects/Abaqus-MarmotInterface/abaqus_v6.env_gcc_compiler_linux abaqus_v6.env
+
+        export MARMOT_INSTALL_DIR=/usr/local 
+        export MARMOT_INSTALL_LIBDIR=lib64 
+
+        # Often fails during %post; allow failure and re-run inside container if needed
+        abaqus make library=user.cpp verbose=3 || true
+        # abaqus make library=/projects/Abaqus-MarmotInterface/user_explicit.cpp verbose=2 || true
+
+        echo "usub_lib_dir='/projects/Abaqus-MarmotInterface'" >> /opt/SIMULIA/EstProducts/2026/linux_a64/SMA/site/abaqus_v6.env 
+    fi
+
+%environment
+    export LANG=en_US.UTF-8
+    export SIMULIA_COMMANDS=/opt/DassaultSystemes/SIMULIA/Commands
+    
+    # Permanently inject GCC 15 paths into the container environment
+    export PATH=/opt/rh/gcc-toolset-15/root/usr/bin:${SIMULIA_COMMANDS}:$PATH
+    export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-15/root/usr/lib64:/opt/rh/gcc-toolset-15/root/usr/lib:${LD_LIBRARY_PATH}
+    export MANPATH=/opt/rh/gcc-toolset-15/root/usr/share/man:${MANPATH}
+    export INFOPATH=/opt/rh/gcc-toolset-15/root/usr/share/info:${INFOPATH}
+
+    export MARMOT_INSTALL_DIR=/usr/local 
+    export MARMOT_INSTALL_LIBDIR=lib64 
+
+    export XLIB_SKIP_ARGB_VISUALS=1
+
+%runscript
+    echo "Use 'abaqus' inside this container. Examples:"
+    echo "  apptainer exec --bind /dev/dri \$APPTAINER_CONTAINER vglrun abaqus cae"
+    exec /bin/bash
