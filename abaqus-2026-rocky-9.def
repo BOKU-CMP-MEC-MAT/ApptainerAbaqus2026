@@ -175,7 +175,6 @@ From: rockylinux:9
             -DCORE_MODULES='all' \
             -DMATERIAL_MODULES='all' \
             -DELEMENT_MODULES='all' \
-            -DCMAKE_INSTALL_PREFIX=/usr/local \
             ..
 
         make -j"${MAKE_JOBS}" install
@@ -183,11 +182,8 @@ From: rockylinux:9
         cd /projects/Abaqus-MarmotInterface
         cp /projects/Abaqus-MarmotInterface/abaqus_v6.env_gcc_compiler_linux abaqus_v6.env
 
-        export MARMOT_INSTALL_DIR=/usr/local 
-        export MARMOT_INSTALL_LIBDIR=lib64 
-
         # Often fails during %post; allow failure and re-run inside container if needed
-        abaqus make library=user.cpp verbose=3 || true
+        # abaqus make library=user.cpp verbose=3 || true
         # abaqus make library=/projects/Abaqus-MarmotInterface/user_explicit.cpp verbose=2 || true
 
         echo "usub_lib_dir='/projects/Abaqus-MarmotInterface'" >> /opt/SIMULIA/EstProducts/2026/linux_a64/SMA/site/abaqus_v6.env 
@@ -202,9 +198,6 @@ From: rockylinux:9
     export LD_LIBRARY_PATH=/opt/rh/gcc-toolset-15/root/usr/lib64:/opt/rh/gcc-toolset-15/root/usr/lib:${LD_LIBRARY_PATH}
     export MANPATH=/opt/rh/gcc-toolset-15/root/usr/share/man:${MANPATH}
     export INFOPATH=/opt/rh/gcc-toolset-15/root/usr/share/info:${INFOPATH}
-
-    export MARMOT_INSTALL_DIR=/usr/local 
-    export MARMOT_INSTALL_LIBDIR=lib64 
 
     export XLIB_SKIP_ARGB_VISUALS=1
 

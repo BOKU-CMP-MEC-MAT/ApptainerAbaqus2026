@@ -75,8 +75,6 @@ def main():
         # Ensure environment variables are active
         unset CXX
         unset FC
-        export MARMOT_INSTALL_DIR=/usr/local
-        export MARMOT_INSTALL_LIBDIR=lib64
         
         echo "------------------------------------------------"
         echo " Compiling Marmot Core via CMake                "
@@ -85,7 +83,7 @@ def main():
         git clean -x -f || true
         mkdir -p build_gcc
         cd build_gcc
-        cmake -DCORE_MODULES='all' -DMATERIAL_MODULES='all' -DELEMENT_MODULES='all' -DCMAKE_INSTALL_PREFIX=/usr/local ..
+        cmake -DCORE_MODULES='all' -DMATERIAL_MODULES='all' -DELEMENT_MODULES='all' ..
         make -j{args.make_jobs} install
         """
 
