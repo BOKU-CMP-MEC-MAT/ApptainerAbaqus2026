@@ -61,7 +61,7 @@ From: rockylinux:9
         libGLES libXcomposite libXdamage libXrandr libXtst libpng freetype fontconfig libxkbcommon \
         nss pcre2 pcre2-utf16 \
         mesa-libGLU libXau libXdmcp \
-        git wget cmake make \
+        git wget bzip2 cmake make \
         glx-utils xorg-x11-xauth \
         gcc-toolset-15-gcc gcc-toolset-15-gcc-c++ gcc-toolset-15-gcc-gfortran
 
@@ -84,40 +84,21 @@ From: rockylinux:9
 
     #################################################################################
     #                                                                               #
-    #                               EIGEN 3.4.0                                     #
+    #          EIGEN 5, AUTODIFF, FASTOR (headers, from the conda channel)          #
     #                                                                               #
     #################################################################################
+    # Header-only. The conda channel of the Edelweiss stack carries the patches Marmot needs (autodiff#397 for
+    # Eigen 5, Fastor on arm64), see Marmot's doc/pages/installation.rst. Only the headers come from conda:
+    # Marmot and the Abaqus user subroutines are compiled with the system GCC.
     cd $APPTAINER_TMPDIR
-    git clone -b 3.4.0 https://gitlab.com/libeigen/eigen.git
-    cd eigen
-    mkdir build
-    cd build
-    cmake -DBUILD_TESTING=OFF ../
-    make -j ${MAKE_JOBS} install
-    
-    #################################################################################
-    #                                                                               #
-    #                               FASTOR LATEST                                   #
-    #                                                                               #
-    #################################################################################
-    cd $APPTAINER_TMPDIR
-    git clone https://github.com/romeric/Fastor.git
-    cd Fastor
-    cmake -DBUILD_TESTING=OFF .
-    make -j ${MAKE_JOBS} install
-    
-    #################################################################################
-    #                                                                               #
-    #                               AUTODIFF LATEST                                 #
-    #                                                                               #
-    #################################################################################
-    cd $APPTAINER_TMPDIR
-    git clone https://github.com/autodiff/autodiff.git
-    cd autodiff
-    mkdir build
-    cd build
-    cmake -DAUTODIFF_BUILD_TESTS=OFF -DAUTODIFF_BUILD_PYTHON=OFF -DAUTODIFF_BUILD_EXAMPLES=OFF -DAUTODIFF_BUILD_DOCS=OFF ..
-    make -j ${MAKE_JOBS} install
+    wget -qO- https://micro.mamba.pm/api/micromamba/linux-64/latest | tar -xj bin/micromamba
+    ./bin/micromamba create -y -r $APPTAINER_TMPDIR/mamba -p /opt/marmot-deps \
+        -c https://repo.prefix.dev/matthiasneuner/edelweiss -c conda-forge "eigen>=5" autodiff=1.1.2 fastor
+    rm -rf $APPTAINER_TMPDIR/mamba bin/micromamba
+    # As in %environment: CMake finds the packages, GCC the headers (abaqus make, Abaqus-MarmotInterface's EIGEN_DIR).
+    export CMAKE_PREFIX_PATH=/opt/marmot-deps
+    export CPATH=/opt/marmot-deps/include
+    export EIGEN_DIR=/opt/marmot-deps/include/eigen3
 
     #################################################################################
     #                                                                               #
@@ -200,6 +181,10 @@ From: rockylinux:9
     export INFOPATH=/opt/rh/gcc-toolset-15/root/usr/share/info:${INFOPATH}
 
     export XLIB_SKIP_ARGB_VISUALS=1
+    # Eigen, autodiff and Fastor from the conda channel (see %post): CMake finds the packages, GCC the headers.
+    export CMAKE_PREFIX_PATH=/opt/marmot-deps
+    export CPATH=/opt/marmot-deps/include
+    export EIGEN_DIR=/opt/marmot-deps/include/eigen3
 
 %runscript
     echo "Use 'abaqus' inside this container. Examples:"
